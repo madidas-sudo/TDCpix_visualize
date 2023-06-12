@@ -135,7 +135,7 @@ fn main() -> Result<(), eframe::Error> {
     let mut chunks: Vec<Chunk> = Vec::new();
     parse_tdcpix_txt("out.txt", &mut chunks);
 
-    let bars = chunks_to_bars(&chunks, 100);
+    let bars = chunks_to_bars(&chunks, 50);
 
     let mut native_options = eframe::NativeOptions::default();
     native_options.resizable = false;
@@ -150,13 +150,12 @@ fn main() -> Result<(), eframe::Error> {
     )
 }
 
-#[derive(Default)]
 struct MyEguiApp {
     bars: Vec<Bar>,
 }
 
 impl MyEguiApp {
-    fn new(cc: &eframe::CreationContext<'_>, bars: Vec<Bar>) -> Self {
+    fn new(_cc: &eframe::CreationContext<'_>, bars: Vec<Bar>) -> Self {
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
@@ -240,7 +239,7 @@ impl TDCpixDataPlot {
 }
 
 impl eframe::App for MyEguiApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::Area::new("Pixel grid").show(ctx, |ui| {
                 let h_num = 40;
