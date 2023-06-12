@@ -1,5 +1,5 @@
-// disable warn on dead code
-#![allow(dead_code)]
+//! TEMPORARY
+#![allow(dead_code, unused_imports)]
 
 // 42..37: qchip_collision_count
 // 36..28: hit_counter
@@ -113,20 +113,20 @@ fn parse_tdcpix_txt(file: &str, chunks: &mut Vec<Chunk>) -> () {
     }
 }
 
-use eframe::{egui, epaint::Rect, Theme};
+use eframe::{egui, epaint, Theme};
 use egui::plot::{Bar, BarChart, Plot};
 
-fn chunks_to_bars(chunks: &Vec<Chunk>, res : usize) -> Vec<Bar> {
+fn chunks_to_bars(chunks: &Vec<Chunk>, res: usize) -> Vec<Bar> {
     let iters_per_bar = chunks.len() / res as usize;
     let mut bars: Vec<Bar> = Vec::new();
 
     for i in 0..res {
         let mut hits = 0;
-        for j in i*iters_per_bar..(i+1)*iters_per_bar {
+        for j in i * iters_per_bar..(i + 1) * iters_per_bar {
             let chunk = &chunks[j];
             hits = hits + chunk.get_frame_word().hit_counter;
         }
-        bars.push(Bar::new((i as f64)/2.0, hits as f64));
+        bars.push(Bar::new((i as f64) / 2.0, hits as f64));
     }
     bars
 }
@@ -136,143 +136,219 @@ fn main() -> Result<(), eframe::Error> {
     parse_tdcpix_txt("out.txt", &mut chunks);
 
     let bars = chunks_to_bars(&chunks, 50);
+    static W_DIM: egui::Vec2 = egui::Vec2::new(768.0, 1024.0);
 
     let mut native_options = eframe::NativeOptions::default();
     native_options.resizable = false;
-    native_options.initial_window_size = Some(egui::Vec2::new(768.0 - 768.0 * 0.3 + 20.0, 768.0));
+    native_options.initial_window_size = Some(W_DIM);
     native_options.default_theme = Theme::Dark;
     native_options.follow_system_theme = false;
 
     eframe::run_native(
         "TDCpix data visualizer",
         native_options,
-        Box::new(|cc| Box::new(MyEguiApp::new(cc, bars))),
+        Box::new(|cc| Box::new(MyEguiApp::new(cc, bars, W_DIM))),
     )
 }
 
 struct MyEguiApp {
     bars: Vec<Bar>,
+    w_dim: egui::Vec2,
 }
 
 impl MyEguiApp {
-    fn new(_cc: &eframe::CreationContext<'_>, bars: Vec<Bar>) -> Self {
+    fn new(_cc: &eframe::CreationContext<'_>, bars: Vec<Bar>, w_dim: egui::Vec2) -> Self {
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
 
-        MyEguiApp { bars }
+        MyEguiApp { bars, w_dim }
     }
 }
 
 struct Pixel {
-    rect: Rect,
+    size: f32,
     color: egui::Color32,
 }
 
 impl Pixel {
-    fn new(rect: Rect) -> Self {
+    fn new(size: f32, redness: u8, blueness: u8) -> Self {
         Pixel {
-            rect,
-            color: egui::Color32::from_rgb(255, 0, 0),
+            size,
+            color: egui::Color32::from_rgb(redness, 0, blueness),
         }
     }
 }
 
-struct PixelGrid {
-    pixels: Vec<Pixel>,
-}
-
-impl PixelGrid {
-    fn new(
-        x_start: f32,
-        y_start: f32,
-        num_w: i32,
-        num_h: i32,
-        side_len: f32,
-        padding: f32,
-    ) -> Self {
-        let mut pixels: Vec<Pixel> = Vec::new();
-        for i in 0..num_w {
-            for j in 0..num_h {
-                let x = i as f32 * (side_len + padding) + x_start;
-                let y = j as f32 * (side_len + padding) + y_start;
-                let rect =
-                    Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(side_len, side_len));
-                pixels.push(Pixel::new(rect));
-            }
-        }
-        PixelGrid { pixels }
-    }
-
-    fn show(&mut self, ui: &mut egui::Ui) {
-        for pixel in &mut self.pixels {
-            ui.painter().rect_filled(pixel.rect, 0.0, pixel.color);
-        }
-    }
-}
-
-
-struct TDCpixDataPlot {
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-}
-
-impl TDCpixDataPlot {
-    fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
-        TDCpixDataPlot { x, y, w, h }
-    }
-
-    fn show_with_bars(&mut self, ui: &mut egui::Ui, bars: &[Bar]) {
-        let bar_chart = BarChart::new(bars.to_vec());
-        Plot::new("my_plot")
-            .view_aspect(2.0)
-            .allow_drag(false)
-            .allow_scroll(false)
-            .allow_boxed_zoom(false)
-            .height(self.h)
-            .width(self.w)
-            .show(ui, |plot_ui| plot_ui.bar_chart(bar_chart));
+impl egui::Widget for Pixel {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        let (rect, response) =
+            ui.allocate_exact_size(egui::Vec2::new(self.size, self.size), egui::Sense::click());
+        let painter = ui.painter();
+        painter.rect_filled(rect, 0.0, self.color);
+        response
     }
 }
 
 impl eframe::App for MyEguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::Area::new("Pixel grid").show(ctx, |ui| {
-                let h_num = 40;
-                let v_num = 45;
+            ui.heading("TDCpix data visualizer");
 
-                let y_off = 20.0;
-                let x_off = 20.0;
+            ui.horizontal(|ui| {
+                // Number of silicon pixels
+                let w_pixels = 40;
+                let h_pixels = 45;
 
-                // get window height
-                let height = ui.available_size().y - y_off - ui.available_size().y * 0.2;
+                // window width
+                // let ww = ui.available_width();
+                let ww = self.w_dim.x;
 
-                // Calculate the side length of the square
-                // If there are v_num squares there is v_num + 1 padding
-                // padding should be 1/10 of the side length
-                let padding_percentage = 0.1;
-                let side_len = height / (v_num as f32 + (v_num as f32 * padding_percentage));
-                let padding = side_len * padding_percentage;
+                // Padding percentage
+                let pp = 0.1;
 
-                let mut pixel_grid = PixelGrid::new(x_off, y_off, h_num, v_num, side_len, padding);
-                pixel_grid.show(ui);
+                // Take the window width
+                // Subtract all the padding
+                // (padding to the right of each pixel + one left padding in beginning)
+                // (ww - (w_pixels+1)*(pp*pw))/w_pixels = pw
+                // pw = ww/(w_pixels + w_pixels*pp + pp)
+                let pw = ww / ((w_pixels as f32) + (w_pixels as f32) * pp + pp);
+
+                for i in 0..h_pixels {
+                    for j in 0..w_pixels {
+                        //  Random redness
+                        if ui
+                            .put(
+                                egui::Rect::from_min_size(
+                                    egui::pos2(
+                                        // index times width+padding + beginning padding
+                                        (j as f32) * (pw + pw * pp) + pw * pp,
+                                        (i as f32) * (pw + pw * pp) + pw * pp,
+                                    ),
+                                    egui::vec2(pw, pw),
+                                ),
+                                Pixel::new(pw, (i * j) as u8, 255 - (i * j) as u8),
+                            )
+                            .clicked()
+                        {
+                            println!("Clicked on pixel {}, {}", i, j)
+                        }
+                    }
+                    ui.end_row();
+                }
             });
-
-            egui::Area::new("Data plot")
-                .fixed_pos(egui::Pos2::new(0.0, ui.available_size().y * 0.8))
-                .show(ctx, |ui| {
-                    let mut data_plot = TDCpixDataPlot::new(
-                        8.0,
-                        25.0,
-                        ui.available_size().x,
-                        ui.available_size().y,
-                    );
-                    data_plot.show_with_bars(ui, &self.bars);
-                });
         });
     }
 }
+
+// struct Pixel {
+//     rect: Rect,
+//     color: egui::Color32,
+// }
+
+// impl Pixel {
+//     fn new(rect: Rect) -> Self {
+//         Pixel {
+//             rect,
+//             color: egui::Color32::from_rgb(255, 0, 0),
+//         }
+//     }
+// }
+
+// struct PixelGrid {
+//     pixels: Vec<Pixel>,
+// }
+
+// impl PixelGrid {
+//     fn new(
+//         x_start: f32,
+//         y_start: f32,
+//         num_w: i32,
+//         num_h: i32,
+//         side_len: f32,
+//         padding: f32,
+//     ) -> Self {
+//         let mut pixels: Vec<Pixel> = Vec::new();
+//         for i in 0..num_w {
+//             for j in 0..num_h {
+//                 let x = i as f32 * (side_len + padding) + x_start;
+//                 let y = j as f32 * (side_len + padding) + y_start;
+//                 let rect =
+//                     Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(side_len, side_len));
+//                 pixels.push(Pixel::new(rect));
+//             }
+//         }
+//         PixelGrid { pixels }
+//     }
+
+//     fn show(&mut self, ui: &mut egui::Ui) {
+//         for pixel in &mut self.pixels {
+//             ui.painter().rect_filled(pixel.rect, 0.0, pixel.color);
+//         }
+//     }
+// }
+
+// struct TDCpixDataPlot {
+//     x: f32,
+//     y: f32,
+//     w: f32,
+//     h: f32,
+// }
+
+// impl TDCpixDataPlot {
+//     fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
+//         TDCpixDataPlot { x, y, w, h }
+//     }
+
+//     fn show_with_bars(&mut self, ui: &mut egui::Ui, bars: &[Bar]) {
+//         let bar_chart = BarChart::new(bars.to_vec());
+//         Plot::new("my_plot")
+//             .view_aspect(2.0)
+//             .allow_drag(false)
+//             .allow_scroll(false)
+//             .allow_boxed_zoom(false)
+//             .height(self.h)
+//             .width(self.w)
+//             .show(ui, |plot_ui| plot_ui.bar_chart(bar_chart));
+//     }
+// }
+
+// impl eframe::App for MyEguiApp {
+//     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+//         egui::CentralPanel::default().show(ctx, |ui| {
+//             egui::Area::new("Pixel grid").show(ctx, |ui| {
+//                 let h_num = 40;
+//                 let v_num = 45;
+
+//                 let y_off = 20.0;
+//                 let x_off = 20.0;
+
+//                 // get window height
+//                 let height = ui.available_size().y - y_off - ui.available_size().y * 0.2;
+
+//                 // Calculate the side length of the square
+//                 // If there are v_num squares there is v_num + 1 padding
+//                 // padding should be 1/10 of the side length
+//                 let padding_percentage = 0.1;
+//                 let side_len = height / (v_num as f32 + (v_num as f32 * padding_percentage));
+//                 let padding = side_len * padding_percentage;
+
+//                 let mut pixel_grid = PixelGrid::new(x_off, y_off, h_num, v_num, side_len, padding);
+//                 pixel_grid.show(ui);
+//             });
+
+//             egui::Area::new("Data plot")
+//                 .fixed_pos(egui::Pos2::new(0.0, ui.available_size().y * 0.8))
+//                 .show(ctx, |ui| {
+//                     let mut data_plot = TDCpixDataPlot::new(
+//                         8.0,
+//                         25.0,
+//                         ui.available_size().x,
+//                         ui.available_size().y,
+//                     );
+//                     data_plot.show_with_bars(ui, &self.bars);
+//                 });
+//         });
+//     }
+// }
