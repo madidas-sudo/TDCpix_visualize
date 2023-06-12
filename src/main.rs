@@ -36,6 +36,7 @@ impl From<&str> for FrameWord {
 // 11    : trailing_coarse_time_selector
 // 10..5 : trailing_coarse_time
 // 4..0  : trailing_fine_time
+#[derive(Clone, Copy)]
 struct DataWord {
     raw: u64,
     data_selector: u8,
@@ -90,10 +91,22 @@ struct Chunk {
 }
 
 impl Chunk {
+    fn get_data_words(&self) -> &Vec<DataWord> {
+        &self.data_words
+    }
     fn get_frame_word(&self) -> &FrameWord {
         &self.frame_word
     }
 }
+
+// impl Default for Chunk {
+//     fn default() -> Self {
+//         Chunk {
+//             data_words: Vec::new(),
+//             frame_word: FrameWord::new(),
+//         }
+//     }
+// }
 
 fn parse_tdcpix_txt(file: &str, chunks: &mut Vec<Chunk>) -> () {
     for line in std::fs::read_to_string(file).unwrap().lines() {
@@ -116,26 +129,7 @@ fn parse_tdcpix_txt(file: &str, chunks: &mut Vec<Chunk>) -> () {
 use eframe::{egui, epaint, Theme};
 use egui::plot::{Bar, BarChart, Plot};
 
-fn chunks_to_bars(chunks: &Vec<Chunk>, res: usize) -> Vec<Bar> {
-    let iters_per_bar = chunks.len() / res as usize;
-    let mut bars: Vec<Bar> = Vec::new();
-
-    for i in 0..res {
-        let mut hits = 0;
-        for j in i * iters_per_bar..(i + 1) * iters_per_bar {
-            let chunk = &chunks[j];
-            hits = hits + chunk.get_frame_word().hit_counter;
-        }
-        bars.push(Bar::new((i as f64) / 2.0, hits as f64));
-    }
-    bars
-}
-
 fn main() -> Result<(), eframe::Error> {
-    let mut chunks: Vec<Chunk> = Vec::new();
-    parse_tdcpix_txt("out.txt", &mut chunks);
-
-    let bars = chunks_to_bars(&chunks, 50);
     static W_DIM: egui::Vec2 = egui::Vec2::new(768.0, 1024.0);
 
     let mut native_options = eframe::NativeOptions::default();
@@ -144,27 +138,113 @@ fn main() -> Result<(), eframe::Error> {
     native_options.default_theme = Theme::Dark;
     native_options.follow_system_theme = false;
 
+    let mut chunks: Vec<Chunk> = Vec::new();
+    parse_tdcpix_txt("out.txt", &mut chunks);
+
+    // Show set of all addresses in all hits
+    use std::collections::HashSet;
+    let mut addresses: HashSet<u8> = HashSet::new();
+    for chunk in &chunks {
+        for data_word in chunk.get_data_words() {
+            addresses.insert(data_word.address);
+        }
+    }
+    for address in addresses {
+        println!("address: {}", address);
+    }
+    // 45 pixels of one column is multiplexed into 9 groups of 5 pixels
+    // | 0 |               (...)
+    // | 1 |               | 0 |
+    // | 2 |               | 1 |
+    // | 3 | =(index 3)=>  | 2 |
+    // | 4 |               | 3 |
+    // | 5 |               | 4 |
+    // | 6 |               (...)
+    // | 7 |
+    // | 8 |
+    // |col|
+
     eframe::run_native(
         "TDCpix data visualizer",
         native_options,
-        Box::new(|cc| Box::new(MyEguiApp::new(cc, bars, W_DIM))),
+        Box::new(|cc| Box::new(MyEguiApp::new(cc, chunks, W_DIM))),
     )
 }
 
 struct MyEguiApp {
-    bars: Vec<Bar>,
+    chunks: Vec<Chunk>,
     w_dim: egui::Vec2,
+    analysis_chunk_idx: usize,
+    hit_idxes: Vec<(u8, u8)>,
+    arbiter_idxes: Vec<(u8, u8)>,
+    pileup_idxes: Vec<(u8, u8)>,
+    idx_field_value: String,
 }
 
 impl MyEguiApp {
-    fn new(_cc: &eframe::CreationContext<'_>, bars: Vec<Bar>, w_dim: egui::Vec2) -> Self {
+    fn new(_cc: &eframe::CreationContext<'_>, chunks: Vec<Chunk>, w_dim: egui::Vec2) -> Self {
         // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
         // Restore app state using cc.storage (requires the "persistence" feature).
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
 
-        MyEguiApp { bars, w_dim }
+        let default_idx = 910485;
+
+        let mut app = MyEguiApp {
+            chunks,
+            w_dim,
+            analysis_chunk_idx: default_idx,
+            hit_idxes: Vec::new(),
+            arbiter_idxes: Vec::new(),
+            pileup_idxes: Vec::new(),
+            idx_field_value: default_idx.to_string(),
+        };
+        app.update_analysis_chunk_idx(default_idx);
+        app
     }
+
+    fn update_analysis_chunk_idx(&mut self, idx: usize) {
+        // Check if index is in bounds
+        if idx >= self.chunks.len() {
+            return;
+        }
+        self.analysis_chunk_idx = idx;
+        self.hit_idxes.clear();
+        self.arbiter_idxes.clear();
+        self.pileup_idxes.clear();
+
+        for dw in self.chunks[self.analysis_chunk_idx].data_words.iter() {
+            let group = dw.address;
+            println!("group: {}", group);
+            // 5 groups in each column
+            let col = group / 5;
+            let row = group % 5;
+            // Arbiter shows which of the 5 pixels were triggered
+            // "00001" means the first pixel was triggered
+            // "10000" means the last pixel was triggered
+            let arbiter = dw.address_arbiter;
+            println!("arbiter: {:05b}\n", arbiter);
+            for pixel in 0..5 {
+                if arbiter & (1 << pixel) != 0 {
+                    self.hit_idxes.push((col, row + pixel));
+                    for group in 0..5 {
+                        // self.arbiter_idxes.push((group*((row + pixel)%5), col));
+                        // self.arbiter_idxes.push((2*group, col));
+                    }
+                }
+            }
+        }
+
+        println!("hit_idxes: {:?}", self.hit_idxes);
+
+    }
+}
+
+enum HitType {
+    Hit,
+    Arbiter,
+    Pileup,
+    Other,
 }
 
 struct Pixel {
@@ -173,10 +253,15 @@ struct Pixel {
 }
 
 impl Pixel {
-    fn new(size: f32, redness: u8, blueness: u8) -> Self {
+    fn new(size: f32, hit_type: HitType) -> Self {
         Pixel {
             size,
-            color: egui::Color32::from_rgb(redness, 0, blueness),
+            color: match hit_type {
+                HitType::Hit => egui::Color32::from_rgb(255, 0, 0),
+                HitType::Arbiter => egui::Color32::from_rgb(0, 255, 0),
+                HitType::Pileup => egui::Color32::from_rgb(0, 0, 255),
+                _ => egui::Color32::from_rgb(50, 50, 50),
+            }
         }
     }
 }
@@ -191,12 +276,34 @@ impl egui::Widget for Pixel {
     }
 }
 
+// struct PixelGrid {
+//     w_pixels: i32,
+//     h_pixels: i32,
+// }
+
+// impl PixelGrid {
+//     fn new(w_pixels: i32, h_pixels: i32) -> Self {
+//         PixelGrid { w_pixels, h_pixels }
+//     }
+// }
+
+// impl egui::Widget for PixelGrid {
+//     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+
+//     }
+// }
+
 impl eframe::App for MyEguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("TDCpix data visualizer");
-
+            // Pixel grid
             ui.horizontal(|ui| {
+                // TMP chunk vector idx 910484
+                // let chunk = &self.chunks[910484];
+
+                // Hits should be red
+                // Pileups should be yellow
+
                 // Number of silicon pixels
                 let w_pixels = 40;
                 let h_pixels = 45;
@@ -228,16 +335,43 @@ impl eframe::App for MyEguiApp {
                                     ),
                                     egui::vec2(pw, pw),
                                 ),
-                                Pixel::new(pw, (i * j) as u8, 255 - (i * j) as u8),
+                                Pixel::new(pw, {
+                                    if self.hit_idxes.contains(&(j, i)) {
+                                        HitType::Hit
+                                    } else if self.arbiter_idxes.contains(&(j, i)) {
+                                        HitType::Arbiter
+                                        // HitType::Other
+                                    } else if self.pileup_idxes.contains(&(j, i)) {
+                                        // HitType::Pileup
+                                        HitType::Other
+                                    } else {
+                                        HitType::Other
+                                    }
+                                }),
                             )
                             .clicked()
                         {
-                            println!("Clicked on pixel {}, {}", i, j)
+                            println!("Clicked on pixel {}, {}", j, i)
                         }
                     }
-                    ui.end_row();
                 }
             });
+
+            //self.analysis_chunk_idx
+            if ui.text_edit_singleline(&mut self.idx_field_value).changed() {
+                // If conversion is fine, update the chunk idx
+                // else ignore
+                if let Ok(idx) = self.idx_field_value.parse::<usize>() {
+                    self.update_analysis_chunk_idx(idx);
+                }
+            }
+            // if ui.button("Update").clicked() {
+            //     // If conversion is fine, update the chunk idx
+            //     // else ignore
+            //     if let Ok(idx) = self.idx_field_value.parse::<usize>() {
+            //         self.update_analysis_chunk_idx(idx);
+            //     }
+            // }
         });
     }
 }
