@@ -146,8 +146,12 @@ use eframe::emath::Align2;
 use eframe::epaint::Pos2;
 use eframe::{egui, epaint, Frame, Theme};
 use egui::plot::{Bar, BarChart, Plot};
+
 use std::collections::BTreeSet;
 use std::collections::HashSet;
+
+use egui_file::FileDialog;
+use std::path::PathBuf;
 
 fn main() -> Result<(), eframe::Error> {
     static W_DIM: egui::Vec2 = egui::Vec2::new(768.0, 1024.0);
@@ -157,63 +161,20 @@ fn main() -> Result<(), eframe::Error> {
     native_options.initial_window_size = Some(W_DIM);
     native_options.default_theme = Theme::Dark;
     native_options.follow_system_theme = false;
-    
-    // Disallow maximize
-    native_options.maximized = false;
 
-    let mut chunks: Vec<Chunk> = Vec::new();
-    parse_tdcpix_txt("out.txt", &mut chunks);
-
-    //* Data info
-    // Show set of all hit_addresses in all hits
-    let mut hit_addresses: HashSet<u8> = HashSet::new();
-    for chunk in &chunks {
-        for data_word in chunk.get_data_words() {
-            hit_addresses.insert(data_word.address);
-        }
-    }
-    for address in hit_addresses {
-        println!("hit_address: {}", address);
-    }
-    println!("");
-
-    // Show set of all arbiter addresses in all hits
-    let mut arbiter_addresses: HashSet<u8> = HashSet::new();
-    for chunk in &chunks {
-        for data_word in chunk.get_data_words() {
-            arbiter_addresses.insert(data_word.address_arbiter);
-        }
-    }
-    for arbiter_address in arbiter_addresses {
-        println!("arbiter_address: {:05b}", arbiter_address);
-    }
-    println!("");
-
-    // Show set of all pileup addresses in all hits
-    let mut pileup_addresses: HashSet<u8> = HashSet::new();
-    for (_i, chunk) in chunks.iter().enumerate() {
-        for data_word in chunk.get_data_words() {
-            // Spit out index of chunk in which pileup address is found
-            // if data_word.address_pileup != 0 {
-            //     println!("pileup_address: {:05b} in chunk {}", data_word.address_pileup, i);
-            // }
-            pileup_addresses.insert(data_word.address_pileup);
-        }
-    }
-    for pileup_address in pileup_addresses {
-        println!("pileup_address: {:05b}", pileup_address);
-    }
-    println!("");
-    //* End data info
+    // let mut chunks: Vec<Chunk> = Vec::new();
+    // parse_tdcpix_txt("out.txt", &mut chunks);
 
     eframe::run_native(
         "TDCpix data visualizer",
         native_options,
-        Box::new(|cc| Box::new(MyEguiApp::new(cc, chunks, W_DIM))),
+        Box::new(|cc| Box::new(MyEguiApp::new(cc, W_DIM))),
     )
 }
 
 struct MyEguiApp {
+    file_path: Option<PathBuf>,
+    open_file_dialog: Option<FileDialog>,
     chunks: Vec<Chunk>,
     w_dim: egui::Vec2,
     analysis_chunk_idx: usize,
@@ -224,25 +185,33 @@ struct MyEguiApp {
 }
 
 impl MyEguiApp {
-    fn new(_cc: &eframe::CreationContext<'_>, chunks: Vec<Chunk>, w_dim: egui::Vec2) -> Self {
-        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
-        // Restore app state using cc.storage (requires the "persistence" feature).
-        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
-        // for e.g. egui::PaintCallback.
-
+    fn new(_cc: &eframe::CreationContext<'_>, w_dim: egui::Vec2) -> Self {
         let default_idx = 951002;
 
         let mut app = MyEguiApp {
-            chunks,
+            file_path: Default::default(),
+            open_file_dialog: Default::default(),
+            chunks: Vec::new(),
             w_dim,
-            analysis_chunk_idx: default_idx,
+            analysis_chunk_idx: 0,
             hit_idxes: Vec::new(),
             arbiter_idxes: Vec::new(),
             pileup_idxes: Vec::new(),
             idx_field_value: default_idx.to_string(),
         };
+
         app.update_analysis_chunk_idx(default_idx);
         app
+    }
+
+    fn update_file(&mut self, file_path: PathBuf) {
+        self.file_path = Some(file_path);
+        self.chunks.clear();
+        parse_tdcpix_txt(
+            self.file_path.as_ref().unwrap().to_str().unwrap(),
+            &mut self.chunks,
+        );
+        self.update_analysis_chunk_idx(0);
     }
 
     fn update_analysis_chunk_idx(&mut self, idx: usize) {
@@ -336,23 +305,6 @@ impl egui::Widget for Pixel {
     }
 }
 
-// struct PixelGrid {
-//     w_pixels: i32,
-//     h_pixels: i32,
-// }
-
-// impl PixelGrid {
-//     fn new(w_pixels: i32, h_pixels: i32) -> Self {
-//         PixelGrid { w_pixels, h_pixels }
-//     }
-// }
-
-// impl egui::Widget for PixelGrid {
-//     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-
-//     }
-// }
-
 impl eframe::App for MyEguiApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -389,7 +341,8 @@ impl eframe::App for MyEguiApp {
                                     egui::vec2(pw, pw),
                                 ),
                                 Pixel::new(pw, {
-                                    if self.hit_idxes.contains(&(x, y)) && self.pileup_idxes.contains(&(x, y))
+                                    if self.hit_idxes.contains(&(x, y))
+                                        && self.pileup_idxes.contains(&(x, y))
                                     {
                                         HitType::DoubleHit
                                     } else if self.hit_idxes.contains(&(x, y)) {
@@ -439,6 +392,22 @@ impl eframe::App for MyEguiApp {
                         self.update_analysis_chunk_idx(idx);
                     }
                 }
+
+                if ui.button("Open").clicked() {
+                    let mut dialog = FileDialog::open_file(self.file_path.clone());
+                    dialog.open();
+                    self.open_file_dialog = Some(dialog);
+                }
+
+                if let Some(dialog) = &mut self.open_file_dialog {
+                    if dialog.show(ctx).selected() {
+                        if let Some(file) = dialog.path() {
+                            self.file_path = Some(file);
+                            self.update_file(self.file_path.clone().unwrap());
+                        }
+                    }
+                }
+
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
                     ui.label(format!("Total number of chunks: {}", self.chunks.len()));
                 });
@@ -446,6 +415,9 @@ impl eframe::App for MyEguiApp {
 
             // Time line
             ui.horizontal(|ui| {
+                if self.analysis_chunk_idx >= self.chunks.len() {
+                    return;
+                }
                 let chunk = &self.chunks[self.analysis_chunk_idx];
                 let dw_num = chunk.data_words.len();
                 let dw_times: Vec<u64> = chunk.data_words.iter().map(|dw| dw.get_time()).collect();
@@ -495,7 +467,7 @@ impl eframe::App for MyEguiApp {
                         Align2::LEFT_TOP,
                         dw_times[i].to_string() + " ns",
                         epaint::FontId {
-                            size: box_widths[i]/8.0,
+                            size: box_widths[i] / 8.0,
                             family: epaint::FontFamily::Monospace,
                         },
                         egui::Color32::WHITE,
