@@ -51,6 +51,22 @@ struct DataWord {
     trailing_fine_time: u8,
 }
 
+impl DataWord {
+    fn get_time(&self) -> u64 {
+        // leading coarse time = 1 bit rollover indicator + 2048(11bit)*3.125 ns =6.4us
+        // leading fine time = 98ps -> 3.125ns
+        // trailing coarse time selector
+        // trailing coarse time = 64*3.125ns = 200ns
+        // trailing fine time = 98ps -> 3.125ns
+        let leading_coarse_time = self.leading_coarse_time as u64 * 3_125;
+        let leading_fine_time = self.leading_fine_time as u64 * 98;
+        let trailing_coarse_time = self.trailing_coarse_time as u64 * 3_125;
+        let trailing_fine_time = self.trailing_fine_time as u64 * 98;
+        leading_coarse_time + leading_fine_time + trailing_coarse_time + trailing_fine_time
+        // This returns the time in ps
+    }
+}
+
 impl From<&str> for DataWord {
     fn from(value: &str) -> Self {
         let raw = u64::from_str_radix(value, 16).unwrap();
@@ -126,8 +142,12 @@ fn parse_tdcpix_txt(file: &str, chunks: &mut Vec<Chunk>) -> () {
     }
 }
 
-use eframe::{egui, epaint, Theme};
+use eframe::emath::Align2;
+use eframe::epaint::Pos2;
+use eframe::{egui, epaint, Frame, Theme};
 use egui::plot::{Bar, BarChart, Plot};
+use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 fn main() -> Result<(), eframe::Error> {
     static W_DIM: egui::Vec2 = egui::Vec2::new(768.0, 1024.0);
@@ -137,32 +157,54 @@ fn main() -> Result<(), eframe::Error> {
     native_options.initial_window_size = Some(W_DIM);
     native_options.default_theme = Theme::Dark;
     native_options.follow_system_theme = false;
+    
+    // Disallow maximize
+    native_options.maximized = false;
 
     let mut chunks: Vec<Chunk> = Vec::new();
     parse_tdcpix_txt("out.txt", &mut chunks);
 
-    // Show set of all addresses in all hits
-    use std::collections::HashSet;
-    let mut addresses: HashSet<u8> = HashSet::new();
+    //* Data info
+    // Show set of all hit_addresses in all hits
+    let mut hit_addresses: HashSet<u8> = HashSet::new();
     for chunk in &chunks {
         for data_word in chunk.get_data_words() {
-            addresses.insert(data_word.address);
+            hit_addresses.insert(data_word.address);
         }
     }
-    for address in addresses {
-        println!("address: {}", address);
+    for address in hit_addresses {
+        println!("hit_address: {}", address);
     }
-    // 45 pixels of one column is multiplexed into 9 groups of 5 pixels
-    // | 0 |               (...)
-    // | 1 |               | 0 |
-    // | 2 |               | 1 |
-    // | 3 | =(index 3)=>  | 2 |
-    // | 4 |               | 3 |
-    // | 5 |               | 4 |
-    // | 6 |               (...)
-    // | 7 |
-    // | 8 |
-    // |col|
+    println!("");
+
+    // Show set of all arbiter addresses in all hits
+    let mut arbiter_addresses: HashSet<u8> = HashSet::new();
+    for chunk in &chunks {
+        for data_word in chunk.get_data_words() {
+            arbiter_addresses.insert(data_word.address_arbiter);
+        }
+    }
+    for arbiter_address in arbiter_addresses {
+        println!("arbiter_address: {:05b}", arbiter_address);
+    }
+    println!("");
+
+    // Show set of all pileup addresses in all hits
+    let mut pileup_addresses: HashSet<u8> = HashSet::new();
+    for (_i, chunk) in chunks.iter().enumerate() {
+        for data_word in chunk.get_data_words() {
+            // Spit out index of chunk in which pileup address is found
+            // if data_word.address_pileup != 0 {
+            //     println!("pileup_address: {:05b} in chunk {}", data_word.address_pileup, i);
+            // }
+            pileup_addresses.insert(data_word.address_pileup);
+        }
+    }
+    for pileup_address in pileup_addresses {
+        println!("pileup_address: {:05b}", pileup_address);
+    }
+    println!("");
+    //* End data info
 
     eframe::run_native(
         "TDCpix data visualizer",
@@ -188,7 +230,7 @@ impl MyEguiApp {
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
 
-        let default_idx = 910485;
+        let default_idx = 951002;
 
         let mut app = MyEguiApp {
             chunks,
@@ -217,32 +259,50 @@ impl MyEguiApp {
             let group = dw.address;
             println!("group: {}", group);
             // 5 groups in each column
-            let col = group / 5;
-            let row = group % 5;
             // Arbiter shows which of the 5 pixels were triggered
             // "00001" means the first pixel was triggered
             // "10000" means the last pixel was triggered
+
             let arbiter = dw.address_arbiter;
-            println!("arbiter: {:05b}\n", arbiter);
-            for pixel in 0..5 {
-                if arbiter & (1 << pixel) != 0 {
-                    self.hit_idxes.push((col, row + pixel));
-                    for group in 0..5 {
-                        // self.arbiter_idxes.push((group*((row + pixel)%5), col));
-                        // self.arbiter_idxes.push((2*group, col));
-                    }
-                }
+            println!("arbiter: {:05b}", arbiter);
+            let arbiter = if arbiter == 0 {
+                0
+            } else {
+                arbiter.trailing_zeros() as u8
+            };
+            println!("arbiter: {arbiter}");
+
+            let pileup = dw.address_pileup;
+            println!("pileup: {:05b}", pileup);
+            let has_pilup = pileup != 0;
+            let pileup = if has_pilup {
+                pileup.trailing_zeros() as u8
+            } else {
+                0
+            };
+            println!("pileup: {pileup}\n");
+
+            let x = group / 9;
+            let y = group % 9 + arbiter * 9;
+
+            self.hit_idxes.push((x, y));
+
+            for px_group in 0..5 {
+                self.arbiter_idxes.push((x, group % 9 + px_group * 9));
+            }
+
+            if has_pilup {
+                self.pileup_idxes.push((x, group % 9 + pileup * 9));
             }
         }
 
         println!("hit_idxes: {:?}", self.hit_idxes);
-
     }
 }
 
 enum HitType {
     Hit,
-    Arbiter,
+    DoubleHit,
     Pileup,
     Other,
 }
@@ -257,11 +317,11 @@ impl Pixel {
         Pixel {
             size,
             color: match hit_type {
-                HitType::Hit => egui::Color32::from_rgb(255, 0, 0),
-                HitType::Arbiter => egui::Color32::from_rgb(0, 255, 0),
-                HitType::Pileup => egui::Color32::from_rgb(0, 0, 255),
+                HitType::Hit => egui::Color32::from_rgb(0, 255, 0),
+                HitType::DoubleHit => egui::Color32::from_rgb(255, 0, 255),
+                HitType::Pileup => egui::Color32::from_rgb(255, 0, 0),
                 _ => egui::Color32::from_rgb(50, 50, 50),
-            }
+            },
         }
     }
 }
@@ -298,18 +358,11 @@ impl eframe::App for MyEguiApp {
         egui::CentralPanel::default().show(ctx, |ui| {
             // Pixel grid
             ui.horizontal(|ui| {
-                // TMP chunk vector idx 910484
-                // let chunk = &self.chunks[910484];
-
-                // Hits should be red
-                // Pileups should be yellow
-
                 // Number of silicon pixels
                 let w_pixels = 40;
                 let h_pixels = 45;
 
                 // window width
-                // let ww = ui.available_width();
                 let ww = self.w_dim.x;
 
                 // Padding percentage
@@ -322,167 +375,133 @@ impl eframe::App for MyEguiApp {
                 // pw = ww/(w_pixels + w_pixels*pp + pp)
                 let pw = ww / ((w_pixels as f32) + (w_pixels as f32) * pp + pp);
 
-                for i in 0..h_pixels {
-                    for j in 0..w_pixels {
-                        //  Random redness
+                for x in 0..w_pixels {
+                    for y in 0..h_pixels {
+                        //  Pixels
                         if ui
                             .put(
                                 egui::Rect::from_min_size(
                                     egui::pos2(
                                         // index times width+padding + beginning padding
-                                        (j as f32) * (pw + pw * pp) + pw * pp,
-                                        (i as f32) * (pw + pw * pp) + pw * pp,
+                                        (x as f32) * (pw + pw * pp) + pw * pp,
+                                        (y as f32) * (pw + pw * pp) + pw * pp,
                                     ),
                                     egui::vec2(pw, pw),
                                 ),
                                 Pixel::new(pw, {
-                                    if self.hit_idxes.contains(&(j, i)) {
+                                    if self.hit_idxes.contains(&(x, y)) && self.pileup_idxes.contains(&(x, y))
+                                    {
+                                        HitType::DoubleHit
+                                    } else if self.hit_idxes.contains(&(x, y)) {
                                         HitType::Hit
-                                    } else if self.arbiter_idxes.contains(&(j, i)) {
-                                        HitType::Arbiter
-                                        // HitType::Other
-                                    } else if self.pileup_idxes.contains(&(j, i)) {
-                                        // HitType::Pileup
-                                        HitType::Other
+                                    } else if self.pileup_idxes.contains(&(x, y)) {
+                                        HitType::Pileup
                                     } else {
                                         HitType::Other
                                     }
+                                    // if self.hit_idxes.contains(&(x, y)) {
+                                    //     HitType::Hit
+                                    // } else if self.pileup_idxes.contains(&(x, y)) {
+                                    //     HitType::Pileup
+                                    // } else if self.arbiter_idxes.contains(&(x, y)) {
+                                    //     HitType::Arbiter
+                                    // } else {
+                                    //     HitType::Other
+                                    // }
                                 }),
                             )
                             .clicked()
                         {
-                            println!("Clicked on pixel {}, {}", j, i)
+                            println!("Clicked on pixel {}, {}", x, y)
                         }
+                    }
+
+                    // q-chip lines
+                    if x % 10 == 0 && x != 0 {
+                        ui.painter().line_segment(
+                            [
+                                egui::pos2((x as f32) * (pw + pw * pp), 0.0),
+                                egui::pos2((x as f32) * (pw + pw * pp), ui.available_height()),
+                            ],
+                            egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 100, 100)),
+                        );
                     }
                 }
             });
 
-            //self.analysis_chunk_idx
-            if ui.text_edit_singleline(&mut self.idx_field_value).changed() {
-                // If conversion is fine, update the chunk idx
-                // else ignore
-                if let Ok(idx) = self.idx_field_value.parse::<usize>() {
-                    self.update_analysis_chunk_idx(idx);
+            // Chunk index field
+            ui.horizontal(|ui| {
+                ui.label("Chunk idx:");
+                if ui.text_edit_singleline(&mut self.idx_field_value).changed() {
+                    // If conversion is fine, update the chunk idx
+                    // else ignore
+                    if let Ok(idx) = self.idx_field_value.parse::<usize>() {
+                        self.update_analysis_chunk_idx(idx);
+                    }
                 }
-            }
-            // if ui.button("Update").clicked() {
-            //     // If conversion is fine, update the chunk idx
-            //     // else ignore
-            //     if let Ok(idx) = self.idx_field_value.parse::<usize>() {
-            //         self.update_analysis_chunk_idx(idx);
-            //     }
-            // }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                    ui.label(format!("Total number of chunks: {}", self.chunks.len()));
+                });
+            });
+
+            // Time line
+            ui.horizontal(|ui| {
+                let chunk = &self.chunks[self.analysis_chunk_idx];
+                let dw_num = chunk.data_words.len();
+                let dw_times: Vec<u64> = chunk.data_words.iter().map(|dw| dw.get_time()).collect();
+
+                let box_widths = vec![self.w_dim.x / (dw_times.len() as f32); dw_times.len()];
+
+                // Get ui y offset in current panel
+                let ui_y_offset = ui.min_rect().top();
+
+                // Get available height
+                let height_avail = self.w_dim.y - ui_y_offset;
+
+                let groups = BTreeSet::from_iter(chunk.data_words.iter().map(|dw| dw.address));
+
+                let box_height = height_avail / groups.len() as f32;
+
+                // give box a y offset based on group
+                let box_offsets = {
+                    let mut offsets = vec![0.0; dw_times.len()];
+                    for (i, dw) in chunk.data_words.iter().enumerate() {
+                        offsets[i] = (groups.range(..dw.address).count() as f32) * box_height;
+                    }
+                    offsets
+                };
+
+                // Use ui painter to draw the boxes from left to right
+                for (i, box_width) in box_widths.iter().enumerate() {
+                    let box_x = i as f32 * box_width;
+                    let box_y = ui_y_offset + box_offsets[i];
+                    let box_color = egui::Color32::from_rgb(
+                        (255.0 * ((i as f32) / (dw_num as f32))) as u8,
+                        0,
+                        (255.0 * (1.0 - (i as f32) / (dw_num as f32))) as u8,
+                    );
+                    // println!("Ascending: {}", (255*i/dw_num) as u8);
+                    // println!("Descending: {}", 1.0 - (i/dw_num as f32));
+
+                    let placement = egui::pos2(box_x, box_y);
+
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_size(placement, egui::vec2(*box_width, box_height)),
+                        0.0,
+                        box_color,
+                    );
+                    ui.painter().text(
+                        placement,
+                        Align2::LEFT_TOP,
+                        dw_times[i].to_string() + " ns",
+                        epaint::FontId {
+                            size: box_widths[i]/8.0,
+                            family: epaint::FontFamily::Monospace,
+                        },
+                        egui::Color32::WHITE,
+                    );
+                }
+            });
         });
     }
 }
-
-// struct Pixel {
-//     rect: Rect,
-//     color: egui::Color32,
-// }
-
-// impl Pixel {
-//     fn new(rect: Rect) -> Self {
-//         Pixel {
-//             rect,
-//             color: egui::Color32::from_rgb(255, 0, 0),
-//         }
-//     }
-// }
-
-// struct PixelGrid {
-//     pixels: Vec<Pixel>,
-// }
-
-// impl PixelGrid {
-//     fn new(
-//         x_start: f32,
-//         y_start: f32,
-//         num_w: i32,
-//         num_h: i32,
-//         side_len: f32,
-//         padding: f32,
-//     ) -> Self {
-//         let mut pixels: Vec<Pixel> = Vec::new();
-//         for i in 0..num_w {
-//             for j in 0..num_h {
-//                 let x = i as f32 * (side_len + padding) + x_start;
-//                 let y = j as f32 * (side_len + padding) + y_start;
-//                 let rect =
-//                     Rect::from_min_size(egui::Pos2::new(x, y), egui::Vec2::new(side_len, side_len));
-//                 pixels.push(Pixel::new(rect));
-//             }
-//         }
-//         PixelGrid { pixels }
-//     }
-
-//     fn show(&mut self, ui: &mut egui::Ui) {
-//         for pixel in &mut self.pixels {
-//             ui.painter().rect_filled(pixel.rect, 0.0, pixel.color);
-//         }
-//     }
-// }
-
-// struct TDCpixDataPlot {
-//     x: f32,
-//     y: f32,
-//     w: f32,
-//     h: f32,
-// }
-
-// impl TDCpixDataPlot {
-//     fn new(x: f32, y: f32, w: f32, h: f32) -> Self {
-//         TDCpixDataPlot { x, y, w, h }
-//     }
-
-//     fn show_with_bars(&mut self, ui: &mut egui::Ui, bars: &[Bar]) {
-//         let bar_chart = BarChart::new(bars.to_vec());
-//         Plot::new("my_plot")
-//             .view_aspect(2.0)
-//             .allow_drag(false)
-//             .allow_scroll(false)
-//             .allow_boxed_zoom(false)
-//             .height(self.h)
-//             .width(self.w)
-//             .show(ui, |plot_ui| plot_ui.bar_chart(bar_chart));
-//     }
-// }
-
-// impl eframe::App for MyEguiApp {
-//     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-//         egui::CentralPanel::default().show(ctx, |ui| {
-//             egui::Area::new("Pixel grid").show(ctx, |ui| {
-//                 let h_num = 40;
-//                 let v_num = 45;
-
-//                 let y_off = 20.0;
-//                 let x_off = 20.0;
-
-//                 // get window height
-//                 let height = ui.available_size().y - y_off - ui.available_size().y * 0.2;
-
-//                 // Calculate the side length of the square
-//                 // If there are v_num squares there is v_num + 1 padding
-//                 // padding should be 1/10 of the side length
-//                 let padding_percentage = 0.1;
-//                 let side_len = height / (v_num as f32 + (v_num as f32 * padding_percentage));
-//                 let padding = side_len * padding_percentage;
-
-//                 let mut pixel_grid = PixelGrid::new(x_off, y_off, h_num, v_num, side_len, padding);
-//                 pixel_grid.show(ui);
-//             });
-
-//             egui::Area::new("Data plot")
-//                 .fixed_pos(egui::Pos2::new(0.0, ui.available_size().y * 0.8))
-//                 .show(ctx, |ui| {
-//                     let mut data_plot = TDCpixDataPlot::new(
-//                         8.0,
-//                         25.0,
-//                         ui.available_size().x,
-//                         ui.available_size().y,
-//                     );
-//                     data_plot.show_with_bars(ui, &self.bars);
-//                 });
-//         });
-//     }
-// }
