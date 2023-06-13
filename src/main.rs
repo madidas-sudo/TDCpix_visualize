@@ -1,5 +1,5 @@
 //! TEMPORARY
-#![allow(dead_code, unused_imports)]
+#![allow(dead_code)]
 
 // 42..37: qchip_collision_count
 // 36..28: hit_counter
@@ -115,15 +115,6 @@ impl Chunk {
     }
 }
 
-// impl Default for Chunk {
-//     fn default() -> Self {
-//         Chunk {
-//             data_words: Vec::new(),
-//             frame_word: FrameWord::new(),
-//         }
-//     }
-// }
-
 fn parse_tdcpix_txt(file: &str, chunks: &mut Vec<Chunk>) -> () {
     for line in std::fs::read_to_string(file).unwrap().lines() {
         let mut words: Vec<&str> = line.split_whitespace().collect();
@@ -143,12 +134,9 @@ fn parse_tdcpix_txt(file: &str, chunks: &mut Vec<Chunk>) -> () {
 }
 
 use eframe::emath::Align2;
-use eframe::epaint::Pos2;
-use eframe::{egui, epaint, Frame, Theme};
-use egui::plot::{Bar, BarChart, Plot};
+use eframe::{egui, epaint,  Theme};
 
 use std::collections::BTreeSet;
-use std::collections::HashSet;
 
 use egui_file::FileDialog;
 use std::path::PathBuf;
@@ -352,15 +340,6 @@ impl eframe::App for MyEguiApp {
                                     } else {
                                         HitType::Other
                                     }
-                                    // if self.hit_idxes.contains(&(x, y)) {
-                                    //     HitType::Hit
-                                    // } else if self.pileup_idxes.contains(&(x, y)) {
-                                    //     HitType::Pileup
-                                    // } else if self.arbiter_idxes.contains(&(x, y)) {
-                                    //     HitType::Arbiter
-                                    // } else {
-                                    //     HitType::Other
-                                    // }
                                 }),
                             )
                             .clicked()
