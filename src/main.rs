@@ -134,7 +134,7 @@ fn parse_tdcpix_txt(file: &str, chunks: &mut Vec<Chunk>) -> () {
 }
 
 use eframe::emath::Align2;
-use eframe::{egui, epaint,  Theme};
+use eframe::{egui, epaint, Theme};
 
 use std::collections::BTreeSet;
 
@@ -142,16 +142,13 @@ use egui_file::FileDialog;
 use std::path::PathBuf;
 
 fn main() -> Result<(), eframe::Error> {
-    static W_DIM: egui::Vec2 = egui::Vec2::new(768.0, 1024.0);
+    static W_DIM: egui::Vec2 = egui::Vec2::new(576.0, 768.0);
 
     let mut native_options = eframe::NativeOptions::default();
     native_options.resizable = false;
     native_options.initial_window_size = Some(W_DIM);
     native_options.default_theme = Theme::Dark;
     native_options.follow_system_theme = false;
-
-    // let mut chunks: Vec<Chunk> = Vec::new();
-    // parse_tdcpix_txt("out.txt", &mut chunks);
 
     eframe::run_native(
         "TDCpix data visualizer",
@@ -267,6 +264,7 @@ enum HitType {
 struct Pixel {
     size: f32,
     color: egui::Color32,
+    is_highlighted: bool,
 }
 
 impl Pixel {
@@ -279,7 +277,12 @@ impl Pixel {
                 HitType::Pileup => egui::Color32::from_rgb(255, 0, 0),
                 _ => egui::Color32::from_rgb(50, 50, 50),
             },
+            is_highlighted: false,
         }
+    }
+
+    fn toggle_highlight(&mut self) {
+        self.is_highlighted = !self.is_highlighted;
     }
 }
 
@@ -317,7 +320,20 @@ impl eframe::App for MyEguiApp {
 
                 for x in 0..w_pixels {
                     for y in 0..h_pixels {
-                        //  Pixels
+                        let mut pixel = Pixel::new(pw, {
+                            if self.hit_idxes.contains(&(x, y))
+                                && self.pileup_idxes.contains(&(x, y))
+                            {
+                                HitType::DoubleHit
+                            } else if self.hit_idxes.contains(&(x, y)) {
+                                HitType::Hit
+                            } else if self.pileup_idxes.contains(&(x, y)) {
+                                HitType::Pileup
+                            } else {
+                                HitType::Other
+                            }
+                        });
+
                         if ui
                             .put(
                                 egui::Rect::from_min_size(
@@ -328,23 +344,11 @@ impl eframe::App for MyEguiApp {
                                     ),
                                     egui::vec2(pw, pw),
                                 ),
-                                Pixel::new(pw, {
-                                    if self.hit_idxes.contains(&(x, y))
-                                        && self.pileup_idxes.contains(&(x, y))
-                                    {
-                                        HitType::DoubleHit
-                                    } else if self.hit_idxes.contains(&(x, y)) {
-                                        HitType::Hit
-                                    } else if self.pileup_idxes.contains(&(x, y)) {
-                                        HitType::Pileup
-                                    } else {
-                                        HitType::Other
-                                    }
-                                }),
+                                pixel,
                             )
                             .clicked()
                         {
-                            println!("Clicked on pixel {}, {}", x, y)
+                            println!("Clicked on pixel {}, {}", x, y);
                         }
                     }
 
@@ -388,7 +392,7 @@ impl eframe::App for MyEguiApp {
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                    ui.label(format!("Total number of chunks: {}", self.chunks.len()));
+                    ui.label(format!("chunks: {}", self.chunks.len()));
                 });
             });
 
@@ -431,26 +435,33 @@ impl eframe::App for MyEguiApp {
                         0,
                         (255.0 * (1.0 - (i as f32) / (dw_num as f32))) as u8,
                     );
-                    // println!("Ascending: {}", (255*i/dw_num) as u8);
-                    // println!("Descending: {}", 1.0 - (i/dw_num as f32));
 
                     let placement = egui::pos2(box_x, box_y);
+                    let rect =
+                        egui::Rect::from_min_size(placement, egui::vec2(*box_width, box_height));
 
-                    ui.painter().rect_filled(
-                        egui::Rect::from_min_size(placement, egui::vec2(*box_width, box_height)),
-                        0.0,
-                        box_color,
-                    );
+                    ui.painter().rect_filled(rect, 0.0, box_color);
                     ui.painter().text(
                         placement,
                         Align2::LEFT_TOP,
-                        dw_times[i].to_string() + " ns",
+                        // dw_times[i].to_string() + " ns",
+                        ((dw_times[i] as f32) / 1000.0).to_string() + " us",
                         epaint::FontId {
                             size: box_widths[i] / 8.0,
                             family: epaint::FontFamily::Monospace,
                         },
                         egui::Color32::WHITE,
                     );
+
+                    // Find out if box is clicked
+                    let response = ui.interact(
+                        rect,
+                        egui::Id::new(format!("tline_box{}", i)),
+                        egui::Sense::click(),
+                    );
+                    if response.clicked() {
+                        println!("Clicked on box {}", i);
+                    }
                 }
             });
         });
