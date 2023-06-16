@@ -1,9 +1,8 @@
-//! TEMPORARY
 #![allow(dead_code)]
 
 mod tdcpix;
-mod pixel;
 mod tdcpixapp;
+mod widgets;
 
 use tdcpixapp::*;
 

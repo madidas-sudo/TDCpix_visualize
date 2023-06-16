@@ -26,7 +26,7 @@ impl Pixel {
         }
     }
 
-    fn toggle_highlight(&mut self) {
+    pub fn toggle_highlight(&mut self) {
         self.is_highlighted = !self.is_highlighted;
     }
 }

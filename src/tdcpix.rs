@@ -1,6 +1,7 @@
 // 42..37: qchip_collision_count
 // 36..28: hit_counter
 // 27..0 : frame_counter
+#[derive(Clone, Copy)]
 pub struct FrameWord {
     raw: u64,
     qchip_collision_count: u8,
@@ -98,6 +99,7 @@ pub enum TDCpixWord {
     DataWord(DataWord),
 }
 
+#[derive(Clone)]
 pub struct Chunk {
     pub data_words: Vec<DataWord>,
     pub frame_word: FrameWord,
