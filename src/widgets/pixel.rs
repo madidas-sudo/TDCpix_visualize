@@ -13,7 +13,7 @@ pub struct Pixel {
 }
 
 impl Pixel {
-    pub fn new(size: f32, hit_type: HitType) -> Self {
+    pub fn new(size: f32, hit_type: HitType, is_highlighted: bool) -> Self {
         Pixel {
             size,
             color: match hit_type {
@@ -22,12 +22,8 @@ impl Pixel {
                 HitType::Pileup => egui::Color32::from_rgb(255, 0, 0),
                 _ => egui::Color32::from_rgb(50, 50, 50),
             },
-            is_highlighted: false,
+            is_highlighted,
         }
-    }
-
-    pub fn toggle_highlight(&mut self) {
-        self.is_highlighted = !self.is_highlighted;
     }
 }
 
@@ -37,6 +33,13 @@ impl egui::Widget for Pixel {
             ui.allocate_exact_size(egui::Vec2::new(self.size, self.size), egui::Sense::click());
         let painter = ui.painter();
         painter.rect_filled(rect, 0.0, self.color);
+        if self.is_highlighted {
+            painter.rect_stroke(
+                rect,
+                0.0,
+                egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 255, 255)),
+            );
+        }
         response
     }
 }

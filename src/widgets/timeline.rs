@@ -4,11 +4,11 @@ use std::collections::BTreeSet;
 use crate::tdcpixapp::*;
 
 pub struct Timeline<'a> {
-    main_app: &'a TDCpixApp,
+    main_app: &'a mut TDCpixApp,
 }
 
 impl<'a> Timeline<'a> {
-    pub fn new(main_app: &'a TDCpixApp) -> Self {
+    pub fn new(main_app: &'a mut TDCpixApp) -> Self {
         Timeline { main_app }
     }
 }
@@ -31,6 +31,7 @@ impl<'a> egui::Widget for Timeline<'a> {
         }
 
         let chunk = &self.main_app.chunks[self.main_app.analysis_chunk_idx];
+
         let dw_num = chunk.data_words.len();
         let dw_times: Vec<u64> = chunk.data_words.iter().map(|dw| dw.get_time()).collect();
 
@@ -63,6 +64,14 @@ impl<'a> egui::Widget for Timeline<'a> {
             let rect = egui::Rect::from_min_size(placement, egui::vec2(*box_width, box_height));
 
             ui.painter().rect_filled(rect, 0.0, box_color);
+            
+            // if has highlighted pixel and highlighted pixel (x, y) == hit_idxes[i] draw highlight around box
+            if let Some(idx) = self.main_app.hit_idxes.get(i) {
+                if self.main_app.has_selected_hit && self.main_app.highlight_idx == *idx {
+                    ui.painter().rect_stroke(rect, 0.0, egui::Stroke::new(2.0, egui::Color32::WHITE));
+                }
+            }
+
             ui.painter().text(
                 placement,
                 Align2::LEFT_TOP,
@@ -82,7 +91,13 @@ impl<'a> egui::Widget for Timeline<'a> {
                 egui::Sense::click(),
             );
             if response.clicked() {
-                println!("Clicked on box {}", i);
+                let old_highlight = self.main_app.highlight_idx;
+                self.main_app.highlight_idx = self.main_app.hit_idxes[i];
+                if !self.main_app.has_selected_hit {
+                    self.main_app.has_selected_hit = true;
+                } else if old_highlight == self.main_app.highlight_idx {
+                    self.main_app.has_selected_hit = !self.main_app.has_selected_hit;
+                }
             }
         }
         response
