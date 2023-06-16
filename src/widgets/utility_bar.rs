@@ -31,56 +31,53 @@ impl<'a> UtilityBar<'a> {
         }
         self.main_app.analysis_chunk_idx = idx;
         self.main_app.hit_idxes.clear();
-        self.main_app.arbiter_idxes.clear();
+        // self.main_app.arbiter_idxes.clear();
         self.main_app.pileup_idxes.clear();
 
         for dw in self.main_app.chunks[self.main_app.analysis_chunk_idx]
             .data_words
             .iter()
         {
-            let group = dw.address;
-            println!("group: {}", group);
+            
+            let group_nr = dw.address;
             // 5 groups in each column
-            // Arbiter shows which of the 5 pixels were triggered
+            // Arbiter shows which of the 5 pixels in group where hit
             // "00001" means the first pixel was triggered
             // "10000" means the last pixel was triggered
-
-            let arbiter = dw.address_arbiter;
-            println!("arbiter: {:05b}", arbiter);
-            let arbiter = if arbiter == 0 {
+            let arbiter_val = if dw.address_arbiter == 0 {
                 0
             } else {
-                arbiter.trailing_zeros() as u8
+                dw.address_arbiter.trailing_zeros() as u8
             };
-            println!("arbiter: {arbiter}");
-
+            
             let pileup = dw.address_pileup;
-            println!("pileup: {:05b}", pileup);
             let has_pilup = pileup != 0;
-            let pileup = if has_pilup {
-                pileup.trailing_zeros() as u8
-            } else {
-                0
-            };
-            println!("pileup: {pileup}\n");
 
-            let x = group / 9;
-            let y = group % 9 + arbiter * 9;
+            // 9 groups and 9 arbiters in each column
+            const HA_PR_COL: u8 = 9;
+            const GRPS_PR_COL: u8 = HA_PR_COL;
+
+            let x = group_nr / GRPS_PR_COL;  // Integer division
+
+            // Each pixel in a group are spaced 9 pixels apart (vertically)
+            let arbiter_nr = group_nr % HA_PR_COL; // Which arbiter is hit
+            let y = arbiter_nr + arbiter_val * HA_PR_COL; // Which pixel in the arbiter is hit
 
             self.main_app.hit_idxes.push((x, y));
 
-            for px_group in 0..5 {
-                self.main_app
-                    .arbiter_idxes
-                    .push((x, group % 9 + px_group * 9));
-            }
-
             if has_pilup {
-                self.main_app.pileup_idxes.push((x, group % 9 + pileup * 9));
+                for pileup_arbit_vals in 0..5 {
+                    if pileup & (1 << pileup_arbit_vals) != 0 {
+                        for pileup_pixels in 0..5 {
+                            self.main_app.pileup_idxes.push((x, arbiter_nr + pileup_pixels * HA_PR_COL))
+                        }
+                    }
+                }
             }
         }
 
         println!("hit_idxes: {:?}", self.main_app.hit_idxes);
+        println!("pileup: {:?}", self.main_app.pileup_idxes);
     }
 }
 

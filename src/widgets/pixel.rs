@@ -37,7 +37,7 @@ impl egui::Widget for Pixel {
             painter.rect_stroke(
                 rect,
                 0.0,
-                egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 255, 255)),
+                egui::Stroke::new(3.0, egui::Color32::from_rgb(255, 255, 255)),
             );
         }
         response
