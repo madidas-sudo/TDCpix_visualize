@@ -1,7 +1,7 @@
 use eframe::{egui, emath::Align2, epaint};
 use std::collections::BTreeSet;
 
-use crate::tdcpixapp::*;
+use crate::tdcpixapp::TDCpixApp;
 
 pub struct Timeline<'a> {
     main_app: &'a mut TDCpixApp,

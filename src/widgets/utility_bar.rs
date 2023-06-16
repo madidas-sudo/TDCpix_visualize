@@ -2,7 +2,7 @@ use eframe::egui;
 use egui_file::FileDialog;
 use std::path::PathBuf;
 
-use crate::tdcpix::*;
+use crate::tdcpix::parse_tdcpix_txt;
 use crate::tdcpixapp::*;
 
 pub struct UtilityBar<'a> {

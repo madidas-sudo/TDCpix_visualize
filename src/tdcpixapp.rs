@@ -1,7 +1,7 @@
 use egui_file::FileDialog;
 use std::path::PathBuf;
 
-use crate::tdcpix::*;
+use crate::tdcpix::{Chunk};
 use crate::widgets::{pixelgrid::PixelGrid, timeline::Timeline, utility_bar::UtilityBar};
 
 use eframe::egui;

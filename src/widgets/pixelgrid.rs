@@ -1,6 +1,7 @@
-use super::pixel::*;
-use crate::TDCpixApp;
 use eframe::egui;
+
+use super::pixel::{Pixel, HitType};
+use crate::tdcpixapp::TDCpixApp;
 
 pub struct PixelGrid<'a> {
     w_pixels: u8,

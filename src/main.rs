@@ -4,7 +4,7 @@ mod tdcpix;
 mod tdcpixapp;
 mod widgets;
 
-use tdcpixapp::*;
+use tdcpixapp::TDCpixApp;
 
 use eframe::Theme;
 use eframe::egui;
