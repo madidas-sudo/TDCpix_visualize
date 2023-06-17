@@ -38,7 +38,6 @@ impl<'a> UtilityBar<'a> {
             .data_words
             .iter()
         {
-            
             let group_nr = dw.address;
             // 5 groups in each column
             // Arbiter shows which of the 5 pixels in group where hit
@@ -49,35 +48,32 @@ impl<'a> UtilityBar<'a> {
             } else {
                 dw.address_arbiter.trailing_zeros() as u8
             };
-            
-            let pileup = dw.address_pileup;
-            let has_pilup = pileup != 0;
 
             // 9 groups and 9 arbiters in each column
             const HA_PR_COL: u8 = 9;
             const GRPS_PR_COL: u8 = HA_PR_COL;
 
-            let x = group_nr / GRPS_PR_COL;  // Integer division
+            let x = group_nr / GRPS_PR_COL; // Integer division
 
             // Each pixel in a group are spaced 9 pixels apart (vertically)
             let arbiter_nr = group_nr % HA_PR_COL; // Which arbiter is hit
             let y = arbiter_nr + arbiter_val * HA_PR_COL; // Which pixel in the arbiter is hit
 
+            // add x,y to hits
             self.main_app.hit_idxes.push((x, y));
 
-            if has_pilup {
-                for pileup_arbit_vals in 0..5 {
-                    if pileup & (1 << pileup_arbit_vals) != 0 {
-                        for pileup_pixels in 0..5 {
-                            self.main_app.pileup_idxes.push((x, arbiter_nr + pileup_pixels * HA_PR_COL))
-                        }
+            // Handle pileup
+            let pileup = dw.address_pileup;
+            for bit in 0..5 {
+                if pileup & (1 << bit) != 0 {
+                    for pileup_pixels in 0..5 {
+                        self.main_app
+                            .pileup_idxes
+                            .push((x, arbiter_nr + pileup_pixels * HA_PR_COL))
                     }
                 }
             }
         }
-
-        println!("hit_idxes: {:?}", self.main_app.hit_idxes);
-        println!("pileup: {:?}", self.main_app.pileup_idxes);
     }
 }
 
@@ -96,7 +92,7 @@ impl<'a> egui::Widget for UtilityBar<'a> {
                 }
             }
 
-            if ui.button("Open").clicked() {
+            if ui.button("Open file").clicked() {
                 let mut dialog = FileDialog::open_file(self.main_app.file_path.clone());
                 dialog.open();
                 self.main_app.open_file_dialog = Some(dialog);

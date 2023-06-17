@@ -1,7 +1,7 @@
 // 42..37: qchip_collision_count
 // 36..28: hit_counter
 // 27..0 : frame_counter
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct FrameWord {
     raw: u64,
     qchip_collision_count: u8,
@@ -34,7 +34,7 @@ impl From<&str> for FrameWord {
 // 11    : trailing_coarse_time_selector
 // 10..5 : trailing_coarse_time
 // 4..0  : trailing_fine_time
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct DataWord {
     pub raw: u64,
     pub data_selector: u8,

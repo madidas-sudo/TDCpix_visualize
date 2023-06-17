@@ -106,12 +106,9 @@ impl<'a> egui::Widget for PixelGrid<'a> {
                     } else if old_highlight == self.main_app.highlight_idx {
                         self.main_app.has_selected_hit = !self.main_app.has_selected_hit;
                     }
-                    println!("Clicked on pixel {}, {}", x, y);
                 }
             }
-
         }
-
         response
     }
 }
