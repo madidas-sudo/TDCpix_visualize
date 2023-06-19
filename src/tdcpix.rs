@@ -72,7 +72,7 @@ impl DataWord {
         // trailing fine time = 98ps -> 3.125ns
         let trailing_coarse_time = self.trailing_coarse_time as u64 * 3_125;
         let trailing_fine_time = self.trailing_fine_time as u64 * 98;
-        (trailing_coarse_time + trailing_fine_time) - self.get_start_time()
+        trailing_coarse_time + trailing_fine_time
         // This returns the time in ps
     }
 
