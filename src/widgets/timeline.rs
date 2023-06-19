@@ -37,6 +37,11 @@ impl<'a> egui::Widget for Timeline<'a> {
 
         // Create vector of times from each data word
         let dw_times: Vec<u64> = chunk.data_words.iter().map(|dw| dw.get_time()).collect();
+        // let dw_times_2: Vec<(u64, u64)> = chunk
+        //     .data_words
+        //     .iter()
+        //     .map(|dw| (dw.get_start_time(), dw.get_duration()))
+        //     .collect();
 
         let box_widths = vec![self.main_app.w_dim.x / (dw_times.len() as f32); dw_times.len()];
 
@@ -77,17 +82,20 @@ impl<'a> egui::Widget for Timeline<'a> {
             let rect = egui::Rect::from_min_size(placement, egui::vec2(*box_width, box_height));
 
             ui.painter().rect_filled(rect, 0.0, box_color);
-            
+
             // if has highlighted pixel and highlighted pixel (x, y) == hit_idxes[i] draw highlight around box
             if let Some(idx) = self.main_app.hit_idxes.get(i) {
                 let is_highlighted_hit =
                     self.main_app.has_selected_hit && self.main_app.highlight_idx == *idx;
-                let is_highlighted_pileup = dw_has_pileup_lut[&(i as u8)]
-                    && self.main_app.has_selected_hit
-                    && self
-                        .main_app
-                        .pileup_idxes
-                        .contains(&self.main_app.highlight_idx);
+
+                let is_highlighted_pileup =
+                    dw_has_pileup_lut[&(i as u8)] && self.main_app.has_selected_hit && {
+                        let mut pileup_idxes: [(u8, u8); 5] = [(0, 0); 5];
+                        for arbit in 0..5 {
+                            pileup_idxes[arbit] = (idx.0, idx.1 % 9 + ((arbit as u8) * 9));
+                        }
+                        pileup_idxes.contains(&self.main_app.highlight_idx)
+                    };
 
                 if is_highlighted_hit || is_highlighted_pileup {
                     ui.painter().rect_stroke(

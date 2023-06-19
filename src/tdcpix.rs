@@ -63,6 +63,30 @@ impl DataWord {
         leading_coarse_time + leading_fine_time + trailing_coarse_time + trailing_fine_time
         // This returns the time in ps
     }
+
+    pub fn get_duration(&self) -> u64 {
+        // leading coarse time = 1 bit rollover indicator + 2048(11bit)*3.125 ns =6.4us
+        // leading fine time = 98ps -> 3.125ns
+        // trailing coarse time selector
+        // trailing coarse time = 64*3.125ns = 200ns
+        // trailing fine time = 98ps -> 3.125ns
+        let trailing_coarse_time = self.trailing_coarse_time as u64 * 3_125;
+        let trailing_fine_time = self.trailing_fine_time as u64 * 98;
+        (trailing_coarse_time + trailing_fine_time) - self.get_start_time()
+        // This returns the time in ps
+    }
+
+    pub fn get_start_time(&self) -> u64 {
+        // leading coarse time = 1 bit rollover indicator + 2048(11bit)*3.125 ns =6.4us
+        // leading fine time = 98ps -> 3.125ns
+        // trailing coarse time selector
+        // trailing coarse time = 64*3.125ns = 200ns
+        // trailing fine time = 98ps -> 3.125ns
+        let leading_coarse_time = self.leading_coarse_time as u64 * 3_125;
+        let leading_fine_time = self.leading_fine_time as u64 * 98;
+        leading_coarse_time + leading_fine_time
+        // This returns the time in ps
+    }
 }
 
 impl From<&str> for DataWord {

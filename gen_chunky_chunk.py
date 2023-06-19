@@ -27,7 +27,7 @@ def g_dataword() -> str:
     # Addres is in range 0 89
     addr = randint(0, 89)
     arb = 1<<randint(0, 4)
-    pileup = 0 # no pileup for now
+    pileup = (1 if randint(0, 332) == 0 else 0) << randint(0, 4)
     lcts = 0
     lct = randint(0, 4095)
     lft = randint(0, 31)
@@ -44,12 +44,15 @@ def g_frameword(num_dw) -> str:
     
 
 def main():
-    NUM_DW = 400
+    NUM_CHUNKS = 10
+
+    NUM_DW = 254
 
     with open("chunky_chunk.txt", "w") as f:
-        for i in range(NUM_DW):
-            f.write(g_dataword() + " ")
-        f.write(g_frameword(NUM_DW) + "\n")
+        for i in range(NUM_CHUNKS):
+            for j in range(NUM_DW):
+                f.write(g_dataword() + " ")
+            f.write(g_frameword(NUM_DW) + "\n")
 
 if __name__ == "__main__":
     main()

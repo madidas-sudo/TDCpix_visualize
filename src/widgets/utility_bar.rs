@@ -92,7 +92,7 @@ impl<'a> egui::Widget for UtilityBar<'a> {
                 }
             }
 
-            if ui.button("Open file").clicked() {
+            if ui.button("Q0").clicked() {
                 let mut dialog = FileDialog::open_file(self.main_app.file_path.clone());
                 dialog.open();
                 self.main_app.open_file_dialog = Some(dialog);
@@ -107,9 +107,9 @@ impl<'a> egui::Widget for UtilityBar<'a> {
                 }
             }
 
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                ui.label(format!("chunks: {}", self.main_app.chunks.len()));
-            });
+            // ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+            ui.label(format!("chunks: {}", self.main_app.chunks.len()));
+            // });
         });
         resp.response
     }
