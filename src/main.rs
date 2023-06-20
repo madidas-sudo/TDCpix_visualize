@@ -6,9 +6,8 @@ mod widgets;
 
 use tdcpixapp::TDCpixApp;
 
-use eframe::Theme;
 use eframe::egui;
-
+use eframe::Theme;
 
 fn main() -> Result<(), eframe::Error> {
     static W_DIM: egui::Vec2 = egui::Vec2::new(576.0, 768.0);

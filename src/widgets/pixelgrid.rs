@@ -1,6 +1,6 @@
 use eframe::egui;
 
-use super::pixel::{Pixel, HitType};
+use super::pixel::{HitType, Pixel};
 use crate::tdcpixapp::TDCpixApp;
 
 pub struct PixelGrid<'a> {
@@ -66,7 +66,7 @@ impl<'a> egui::Widget for PixelGrid<'a> {
                         egui::Stroke::new(1.0, egui::Color32::from_rgb(100, 100, 100)),
                     );
                 }
-                
+
                 // Pixel object
                 let pixel = Pixel::new(
                     pw,
