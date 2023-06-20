@@ -44,6 +44,7 @@ impl<'a> egui::Widget for Timeline<'a> {
             .collect();
 
         // let box_widths = vec![self.main_app.w_dim.x / (dw_times.len() as f32); dw_times.len()];
+        // Calculate the width of each box based on the duration of the data word
         let box_widths: Vec<f32> = {
             let max_time = dw_times.iter().map(|(t, d)| t + d).max().unwrap_or(0);
             let min_time = dw_times.iter().map(|(t, _)| t).min().unwrap_or(&0);
@@ -56,9 +57,10 @@ impl<'a> egui::Widget for Timeline<'a> {
                 .collect::<Vec<f32>>()
         };
 
-        // Create vector of pixel groups (addresses)
+        // Create a set of unique addresses for the data words
         let groups = BTreeSet::from_iter(chunk.data_words.iter().map(|dw| dw.address));
 
+        // Create a lookup table to determine if a data word has pileup
         let dw_has_pileup_lut = HashMap::<u8, bool>::from_iter(
             chunk
                 .data_words
@@ -67,20 +69,20 @@ impl<'a> egui::Widget for Timeline<'a> {
                 .map(|(i, dw)| (i as u8, dw.address_pileup != 0)),
         );
 
+        // Calculate the height of each box based on the number of unique addresses
         let box_height = height_avail / groups.len() as f32;
 
-        // give box a y offset based on group
+        // Calculate the y offset for each box based on its group
         let box_yoffsets = {
             let mut offsets = vec![0.0; dw_times.len()];
             for (i, dw) in chunk.data_words.iter().enumerate() {
-                // Set offset based on index of group in groups times box height
                 offsets[i] = (groups.range(..dw.address).count() as f32) * box_height;
             }
             offsets
         };
 
+        // Calculate the x offset for each box based on its start time
         let box_xoffsets = {
-            // relative start time of each data word
             let max_time = dw_times.iter().map(|(t, d)| t + d).max().unwrap_or(1);
             let min_time = dw_times.iter().map(|(t, _)| t).min().unwrap_or(&0);
             let rel_start_times = dw_times
@@ -92,9 +94,8 @@ impl<'a> egui::Widget for Timeline<'a> {
                 .collect::<Vec<f32>>()
         };
 
-        // Use ui painter to draw the boxes from left to right
+        // Draw each box
         for (i, box_width) in box_widths.iter().enumerate() {
-            // let box_x = i as f32 * box_width;
             let box_x = box_xoffsets[i];
             let box_y = ui_y_offset + box_yoffsets[i];
             let box_color = egui::Color32::from_rgb(
@@ -108,24 +109,20 @@ impl<'a> egui::Widget for Timeline<'a> {
 
             ui.painter().rect_filled(rect, 0.0, box_color);
 
-            
-            // if has highlighted pixel and highlighted pixel (x, y) == hit_idxes[i] draw highlight around box
+            // Highlight the box if it contains the selected hit or pileup
             if let Some(idx) = self.main_app.hit_idxes.get(i) {
-                
-                
                 let is_highlighted_hit =
-                self.main_app.has_selected_hit && self.main_app.highlight_idx == *idx;
-                
+                    self.main_app.has_selected_hit && self.main_app.highlight_idx == *idx;
+
                 let is_highlighted_pileup =
-                dw_has_pileup_lut[&(i as u8)] && self.main_app.has_selected_hit && {
-                    let mut pileup_idxes: [(u8, u8); 5] = [(0, 0); 5];
-                    for arbit in 0..5 {
-                        pileup_idxes[arbit] = (idx.0, idx.1 % 9 + ((arbit as u8) * 9));
-                    }
-                    pileup_idxes.contains(&self.main_app.highlight_idx)
-                };
-                
-                // Draw highlight on box if it is highlighted
+                    dw_has_pileup_lut[&(i as u8)] && self.main_app.has_selected_hit && {
+                        let mut pileup_idxes: [(u8, u8); 5] = [(0, 0); 5];
+                        for arbit in 0..5 {
+                            pileup_idxes[arbit] = (idx.0, idx.1 % 9 + ((arbit as u8) * 9));
+                        }
+                        pileup_idxes.contains(&self.main_app.highlight_idx)
+                    };
+
                 if is_highlighted_hit || is_highlighted_pileup {
                     ui.painter().rect_stroke(
                         rect,
@@ -134,21 +131,24 @@ impl<'a> egui::Widget for Timeline<'a> {
                     );
                 }
 
-                // Find out if box is hovered
-                let hover_response = ui.interact(rect, egui::Id::new(format!("tline_box_hover{}", i)), egui::Sense::hover());
+                // Show a tooltip when hovering over the box
+                let hover_response = ui.interact(
+                    rect,
+                    egui::Id::new(format!("tline_box_hover{}", i)),
+                    egui::Sense::hover(),
+                );
                 if hover_response.hovered() {
-                    // Small hover info
                     let hover_text = format!(
                         "Pixel coord: {}, {}\nTime: {} ns\nDEBUG: {}",
-                        idx.0, idx.1,
+                        idx.0,
+                        idx.1,
                         chunk.data_words[i].get_duration(),
                         *box_width
                     );
-                    // ui.ctx().output().show_tooltip_text(hover_text);
                     hover_response.on_hover_text(egui::RichText::new(hover_text));
                 }
 
-                // Find out if box is clicked
+                // Select the box when clicked
                 let click_response = ui.interact(
                     rect,
                     egui::Id::new(format!("tline_box{}", i)),
@@ -156,8 +156,6 @@ impl<'a> egui::Widget for Timeline<'a> {
                 );
                 if click_response.clicked() {
                     let old_highlight = self.main_app.highlight_idx;
-                    // Set the highlight x,y to the x,y at index i in hit_idxes
-                    // with i begin the index of the box clicked
                     self.main_app.highlight_idx = self.main_app.hit_idxes[i];
                     if !self.main_app.has_selected_hit {
                         self.main_app.has_selected_hit = true;
@@ -166,8 +164,8 @@ impl<'a> egui::Widget for Timeline<'a> {
                     }
                 }
             }
-
         }
+
         response
     }
 }
