@@ -1,7 +1,6 @@
 use eframe::egui;
 pub enum HitType {
     Hit,
-    DoubleHit,
     Pileup,
     Other,
 }
@@ -18,7 +17,6 @@ impl Pixel {
             size,
             color: match hit_type {
                 HitType::Hit => egui::Color32::from_rgb(0, 255, 0),
-                HitType::DoubleHit => egui::Color32::from_rgb(255, 0, 255),
                 HitType::Pileup => egui::Color32::from_rgb(255, 0, 0),
                 _ => egui::Color32::from_rgb(50, 50, 50),
             },

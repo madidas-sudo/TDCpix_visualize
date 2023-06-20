@@ -117,8 +117,8 @@ impl<'a> egui::Widget for Timeline<'a> {
                 let is_highlighted_pileup =
                     dw_has_pileup_lut[&(i as u8)] && self.main_app.has_selected_hit && {
                         let mut pileup_idxes: [(u8, u8); 5] = [(0, 0); 5];
-                        for arbit in 0..5 {
-                            pileup_idxes[arbit] = (idx.0, idx.1 % 9 + ((arbit as u8) * 9));
+                        for (arbit, item) in pileup_idxes.iter_mut().enumerate() {
+                            *item = (idx.0, idx.1 % 9 + ((arbit as u8) * 9));
                         }
                         pileup_idxes.contains(&self.main_app.highlight_idx)
                     };
