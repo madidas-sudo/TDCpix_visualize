@@ -23,10 +23,11 @@
 
 from random import randint
 
+
 def g_dataword() -> str:
     # Addres is in range 0 89
     addr = randint(0, 89)
-    arb = 1<<randint(0, 4)
+    arb = 1 << randint(0, 4)
     pileup = (1 if randint(0, 332) == 0 else 0) << randint(0, 4)
     lcts = 0
     lct = randint(0, 4095)
@@ -36,23 +37,26 @@ def g_dataword() -> str:
     tft = randint(0, 31)
     # remember that the word is 48 bits long
     # So the length of the string is 12 characters
-    num = 1<<47 | addr<<40 | arb<<35 | pileup<<30 | lcts<<29 | lct<<17 | lft<<12 | tcts<<11 | tct<<5 | tft
+    num = 1 << 47 | addr << 40 | arb << 35 | pileup << 30 | lcts << 29 | lct << 17 | lft << 12 | tcts << 11 | tct << 5 | tft
     return "{:012x}".format(num)
 
-def g_frameword(num_dw) -> str:
-    return "e8005000eb00"
-    
+
+def g_frameword(num_dw, chunk_num) -> str:
+    return "{:012x}".format(0b111 << 45 | num_dw << 28 | chunk_num)
+    # return "e8005000eb00"
+
 
 def main():
     NUM_CHUNKS = 10
 
-    NUM_DW = 254
+    NUM_DW = 7
 
     with open("chunky_chunk.txt", "w") as f:
         for i in range(NUM_CHUNKS):
-            for j in range(NUM_DW):
+            for j in range(randint(0, NUM_DW)):
                 f.write(g_dataword() + " ")
-            f.write(g_frameword(NUM_DW) + "\n")
+            f.write(g_frameword(NUM_DW, i) + "\n")
+
 
 if __name__ == "__main__":
     main()
