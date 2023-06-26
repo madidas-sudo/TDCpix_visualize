@@ -11,8 +11,8 @@ As of now i have only implemented pixel hit-mapping for the first quarterchip.
 The application shows a visualization of the TDCpix ASIC with the four quarter-chip regions seperated by the four vertical lines. When data is loaded the hits will appear as green dots and if there is pileup on an arbiter, the affacted pixels will be drawn in red. In the buttom there is a timeline from left to right with the time of each hits shown on mouse hover. If you click a pixel you can see the corresponding box highlighted in the buttom timeline.
 
 <div style="display: flex;">
-    <img src="docs/imgs/rand_hits.png" style="width:50%; padding:5px"></img>
-    <img src="docs/imgs/s_curve.png" style="width:50%; padding:5px"></img>
+    <img src="docs/imgs/rand_hits.png" style="width:40%; padding:5px"></img>
+    <img src="docs/imgs/s_curve.png" style="width:40%; padding:5px"></img>
 </div>
 
 
